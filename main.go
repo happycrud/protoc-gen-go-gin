@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
@@ -37,10 +38,13 @@ func main() {
 }
 
 const (
+	contextPackage     = protogen.GoImportPath("context")
 	httpPackage        = protogen.GoImportPath("net/http")
+	jsonPackage        = protogen.GoImportPath("encoding/json")
 	ginPackage         = protogen.GoImportPath("github.com/gin-gonic/gin")
 	ginBingdingPackage = protogen.GoImportPath("github.com/gin-gonic/gin/binding")
 	grpcPackage        = protogen.GoImportPath("google.golang.org/grpc")
+	protojsonPackage   = protogen.GoImportPath("google.golang.org/protobuf/encoding/protojson")
 )
 
 // generateFile generates a _grpc.pb.go file containing gRPC service definitions.
@@ -89,34 +93,85 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	}
 }
 
+func serverSignature(g *protogen.GeneratedFile, method *protogen.Method) string {
+	var reqArgs []string
+	ret := "error"
+	if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+		reqArgs = append(reqArgs, g.QualifiedGoIdent(contextPackage.Ident("Context")))
+		ret = "(*" + g.QualifiedGoIdent(method.Output.GoIdent) + ", error)"
+	}
+	if !method.Desc.IsStreamingClient() {
+		reqArgs = append(reqArgs, "*"+g.QualifiedGoIdent(method.Input.GoIdent))
+	}
+	if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
+		reqArgs = append(reqArgs, method.Parent.GoName+"_"+method.GoName+"Server")
+	}
+	return method.GoName + "(" + strings.Join(reqArgs, ", ") + ") " + ret
+}
+
 func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
 	svr := strings.ToLower(service.GoName[:1]) + service.GoName[1:]
-	g.P("var ", svr, "Gin", " ", service.GoName, "Server")
+	g.P("var ", svr, "Gin", " ", service.GoName, "Server", "Gin")
+
+	// Server interface.
+	serverType := service.GoName + "Server"
+	g.P("// ", serverType, " is the server API for ", service.GoName, " service.")
+
+	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
+		g.P("//")
+	}
+	g.Annotate(serverType, service.Location)
+	g.P("type ", serverType, "Gin interface {")
+	for _, method := range service.Methods {
+		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
+			continue
+		}
+		g.Annotate(serverType+"."+method.GoName, method.Location)
+		if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
+		}
+		g.P(method.Comments.Leading,
+			serverSignature(g, method))
+	}
+	g.P("}")
+	g.P()
 
 	for _, method := range service.Methods {
+		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
+			continue
+		}
 		g.P("func ", unexport(method.GoName), "G(c *", ginPackage.Ident("Context"), ") {")
 		g.P("a := &", method.Input.GoIdent, "{}")
 		g.P(`err := c.BindWith(a,`, ginBingdingPackage.Ident(`Default(c.Request.Method, c.Request.Header.Get("Content-Type")))`))
+		g.P("type Status struct {")
+		g.P("Code    int32       `json:\"code\"`")
+		g.P("Message string      `json:\"message\"`")
+		g.P("Data    interface{}  `json:\"data\"`")
+		g.P("}")
+		g.P("status := &Status{}")
 		g.P(`if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			status.Code = http.StatusBadRequest
+			status.Message = err.Error()
+			c.JSON(http.StatusBadRequest, status)
 			return
 			 }`)
 
 		g.P("resp, err := ", svr, "Gin.", method.GoName, "(c, a)")
 		g.P(`if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			status.Code = http.StatusInternalServerError
+			status.Message = err.Error()
+			c.JSON(http.StatusInternalServerError, status)
 			return
 			 }`)
-		g.P("c.JSON(", httpPackage.Ident("StatusOK"), ", resp)")
-
+		g.P("status.Data = resp")
+		g.P("c.JSON(", httpPackage.Ident("StatusOK"), ", status)")
 		g.P("}")
 	}
 
-	g.P("func RegisterGin(e *", ginPackage.Ident("Engine"), ", svr ", service.GoName, "Server){")
+	g.P("func Register", service.GoName, "Gin(e *", ginPackage.Ident("Engine"), ", svr ", service.GoName, "ServerGin, middleware map[string][]gin.HandlerFunc){")
 	g.P(svr, "Gin = svr")
 	for _, method := range service.Methods {
 		path := strconv.Quote(fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name()))
-		g.P("e.POST(", path, ",", unexport(method.GoName), "G)")
+		g.P("e.POST(", path, ",", " append(middleware[", path, "], ", unexport(method.GoName), "G)...)")
 	}
 	g.P("}")
 
