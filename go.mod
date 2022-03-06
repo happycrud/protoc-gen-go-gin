@@ -1,4 +1,4 @@
-module protoc-gen-go-gin
+module github.com/hongshengjie/protoc-gen-go-gin
 
 go 1.17
 
