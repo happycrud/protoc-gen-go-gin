@@ -22,11 +22,11 @@ message User {
     //创建时间
     string	ctime = 4 ;
     //更新时间
-    string	mtime = 5 ;  
+    string	mtime = 5 ; 
 }
 
 message UserId{
-    int64 id = 1 ;
+    int64 id = 1 ;// @gotags: form:"id"
 }
 
 message UpdateUserReq{
@@ -39,13 +39,13 @@ message UpdateUserReq{
 
 message ListUsersReq{
     // number of page
-    int64 page = 1 ; // @gotags: json:"page" form:"page"
+    int64 page = 1 ; // @gotags: form:"page"
     // default 20
-    int64 page_size = 2 ;
+    int64 page_size = 2 ; // @gotags: form:"page_size"
     // order by  for example :  [-id]  -: DESC 
-    string order_by = 3 ; 
+    string order_by = 3 ; // @gotags: form:"order_by"
     //  id > ?
-    int64 id_gt = 4;
+    int64 id_gt = 4; // @gotags: form:"id_gt"
     // filter xxx like %?%
     // string xxx_contains = 5;
     // yyy > ?

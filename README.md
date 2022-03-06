@@ -8,6 +8,7 @@
 go install github.com/hongshengjie/protoc-gen-go-gin@latest
 
 protoc -I. -I/usr/local/include --go-gin_out=. --go_out=. --go-grpc_out=. proto/user.api.proto
+protoc-go-inject-tag -input api/user.api.pb.go
 ```
 
 ## TODO

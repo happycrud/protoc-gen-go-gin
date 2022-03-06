@@ -111,17 +111,17 @@ func serverSignature(g *protogen.GeneratedFile, method *protogen.Method) string 
 
 func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
 	svr := strings.ToLower(service.GoName[:1]) + service.GoName[1:]
-	g.P("var ", svr, "Gin", " ", service.GoName, "Server", "Gin")
+	g.P("var ", svr, "HTTP", " ", service.GoName, "HTTP", "Server")
 
 	// Server interface.
-	serverType := service.GoName + "Server"
+	serverType := service.GoName + "HTTPServer"
 	g.P("// ", serverType, " is the server API for ", service.GoName, " service.")
 
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
 	}
 	g.Annotate(serverType, service.Location)
-	g.P("type ", serverType, "Gin interface {")
+	g.P("type ", serverType, " interface {")
 	for _, method := range service.Methods {
 		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
 			continue
@@ -139,7 +139,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
 			continue
 		}
-		g.P("func ", unexport(method.GoName), "G(c *", ginPackage.Ident("Context"), ") {")
+		g.P("func ", unexport(service.GoName), method.GoName, "(c *", ginPackage.Ident("Context"), ") {")
 		g.P("a := &", method.Input.GoIdent, "{}")
 		g.P(`err := c.BindWith(a,`, ginBingdingPackage.Ident(`Default(c.Request.Method, c.Request.Header.Get("Content-Type")))`))
 		g.P("type Status struct {")
@@ -155,7 +155,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 			return
 			 }`)
 
-		g.P("resp, err := ", svr, "Gin.", method.GoName, "(c, a)")
+		g.P("resp, err := ", svr, "HTTP.", method.GoName, "(c, a)")
 		g.P(`if err != nil {
 			status.Code = http.StatusInternalServerError
 			status.Message = err.Error()
@@ -167,11 +167,16 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		g.P("}")
 	}
 
-	g.P("func Register", service.GoName, "Gin(e *", ginPackage.Ident("Engine"), ", svr ", service.GoName, "ServerGin, middleware map[string][]gin.HandlerFunc){")
-	g.P(svr, "Gin = svr")
+	g.P("func Register", service.GoName, "HTTP(e *", ginPackage.Ident("Engine"), ", svr ", service.GoName, "HTTPServer, middleware map[string][]gin.HandlerFunc){")
+	g.P(svr, "HTTP = svr")
 	for _, method := range service.Methods {
 		path := strconv.Quote(fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name()))
-		g.P("e.POST(", path, ",", " append(middleware[", path, "], ", unexport(method.GoName), "G)...)")
+		if strings.HasPrefix(string(method.Desc.Name()), "Get") || strings.HasPrefix(string(method.Desc.Name()), "List") {
+			g.P("e.GET(", path, ",", " append(middleware[", path, "], ", unexport(service.GoName), method.GoName, ")...)")
+		} else {
+			g.P("e.POST(", path, ",", " append(middleware[", path, "], ", unexport(service.GoName), method.GoName, ")...)")
+		}
+
 	}
 	g.P("}")
 
