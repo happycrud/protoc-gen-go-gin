@@ -167,14 +167,21 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 		g.P("}")
 	}
 
+	g.P("const (")
+	for _, method := range service.Methods {
+		path := strconv.Quote(fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name()))
+		g.P("Path", service.GoName, method.GoName, " = ", path)
+	}
+	g.P(")")
+
 	g.P("func Register", service.GoName, "HTTP(e *", ginPackage.Ident("Engine"), ", svr ", service.GoName, "HTTPServer, middleware map[string][]gin.HandlerFunc){")
 	g.P(svr, "HTTP = svr")
 	for _, method := range service.Methods {
-		path := strconv.Quote(fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name()))
+
 		if strings.HasPrefix(string(method.Desc.Name()), "Get") || strings.HasPrefix(string(method.Desc.Name()), "List") {
-			g.P("e.GET(", path, ",", " append(middleware[", path, "], ", unexport(service.GoName), method.GoName, ")...)")
+			g.P("e.GET(Path", service.GoName, method.GoName, ",", " append(middleware[Path", service.GoName, method.GoName, "], ", unexport(service.GoName), method.GoName, ")...)")
 		} else {
-			g.P("e.POST(", path, ",", " append(middleware[", path, "], ", unexport(service.GoName), method.GoName, ")...)")
+			g.P("e.POST(Path", service.GoName, method.GoName, ",", " append(middleware[Path", service.GoName, method.GoName, "], ", unexport(service.GoName), method.GoName, ")...)")
 		}
 
 	}

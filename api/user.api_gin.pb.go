@@ -150,11 +150,20 @@ func userServiceListUsers(c *gin.Context) {
 	status.Data = resp
 	c.JSON(http.StatusOK, status)
 }
+
+const (
+	PathUserServiceCreateUser = "/example.UserService/CreateUser"
+	PathUserServiceDeleteUser = "/example.UserService/DeleteUser"
+	PathUserServiceUpdateUser = "/example.UserService/UpdateUser"
+	PathUserServiceGetUser    = "/example.UserService/GetUser"
+	PathUserServiceListUsers  = "/example.UserService/ListUsers"
+)
+
 func RegisterUserServiceHTTP(e *gin.Engine, svr UserServiceHTTPServer, middleware map[string][]gin.HandlerFunc) {
 	userServiceHTTP = svr
-	e.POST("/example.UserService/CreateUser", append(middleware["/example.UserService/CreateUser"], userServiceCreateUser)...)
-	e.POST("/example.UserService/DeleteUser", append(middleware["/example.UserService/DeleteUser"], userServiceDeleteUser)...)
-	e.POST("/example.UserService/UpdateUser", append(middleware["/example.UserService/UpdateUser"], userServiceUpdateUser)...)
-	e.GET("/example.UserService/GetUser", append(middleware["/example.UserService/GetUser"], userServiceGetUser)...)
-	e.GET("/example.UserService/ListUsers", append(middleware["/example.UserService/ListUsers"], userServiceListUsers)...)
+	e.POST(PathUserServiceCreateUser, append(middleware[PathUserServiceCreateUser], userServiceCreateUser)...)
+	e.POST(PathUserServiceDeleteUser, append(middleware[PathUserServiceDeleteUser], userServiceDeleteUser)...)
+	e.POST(PathUserServiceUpdateUser, append(middleware[PathUserServiceUpdateUser], userServiceUpdateUser)...)
+	e.GET(PathUserServiceGetUser, append(middleware[PathUserServiceGetUser], userServiceGetUser)...)
+	e.GET(PathUserServiceListUsers, append(middleware[PathUserServiceListUsers], userServiceListUsers)...)
 }
